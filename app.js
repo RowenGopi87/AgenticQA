@@ -267,10 +267,9 @@ async function executeTest(testId) {
     if (!test) return;
     
     // Show executing state
-    showNotification('Executing test...', 'info');
+    showNotification('Executing test via Cursor MCP...', 'info');
     
-    // Simulate API call to Cursor IDE
-    // In real implementation, this would be an actual API call
+    // Create execution record
     const execution = {
         id: generateId(),
         testId: testId,
@@ -284,34 +283,221 @@ async function executeTest(testId) {
     testExecutions.push(execution);
     saveExecutionsToStorage();
     
-    // Simulate test execution (replace with actual Cursor API call)
-    setTimeout(() => {
-        // Random test result for demo
-        const statuses = ['passed', 'failed', 'blocked'];
-        const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+    // Update UI to show test is running
+    const executeBtn = document.querySelector(`button[onclick="executeTest('${testId}')"]`);
+    if (executeBtn) {
+        executeBtn.disabled = true;
+        executeBtn.innerHTML = `
+            <div class="flex items-center space-x-2">
+                <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Running...</span>
+            </div>
+        `;
+    }
+    
+    const startTime = Date.now();
+    
+    try {
+        // Prepare the test prompt for MCP execution
+        const mcpPrompt = {
+            action: "playwright_test",
+            testName: test.name,
+            testType: test.type,
+            module: test.module,
+            prompt: test.prompt,
+            expectedResults: test.expectedResults
+        };
         
-        execution.status = randomStatus;
-        execution.duration = Math.floor(Math.random() * 10000) + 1000; // Random duration between 1-11 seconds
+        // Since MCP runs through Cursor IDE, we'll use a different approach
+        // We'll create a formatted prompt that Cursor's agent can execute
+        const formattedPrompt = `
+Execute this Playwright test:
+
+Test Name: ${test.name}
+Test Type: ${test.type}
+Module: ${test.module}
+
+Test Instructions:
+${test.prompt}
+
+Expected Results:
+${test.expectedResults}
+
+Please:
+1. Navigate to the appropriate page/URL
+2. Perform the test actions as described
+3. Verify the expected results
+4. Return the test status (passed/failed/blocked) and any relevant screenshots or logs
+`;
+
+        // Since we can't directly call MCP from the browser, we'll need to use a different approach
+        // Option 1: Use Cursor's API if available
+        // Option 2: Copy prompt to clipboard and notify user to paste in Cursor
+        // Option 3: Use a local server as a bridge
+        
+        // For now, let's implement Option 2 - Copy to clipboard
+        await navigator.clipboard.writeText(formattedPrompt);
+        
+        // Show modal with instructions
+        showMCPInstructionsModal(test, execution, startTime);
+        
+    } catch (error) {
+        console.error('Error executing test:', error);
+        
+        // Update execution with error
+        execution.status = 'failed';
+        execution.duration = Date.now() - startTime;
+        execution.logs = `Error: ${error.message}`;
         
         // Update test status
-        test.status = randomStatus;
+        test.status = 'failed';
         test.lastExecuted = execution.executedAt;
         
         saveTestsToStorage();
         saveExecutionsToStorage();
         
-        showNotification(`Test ${randomStatus}!`, randomStatus === 'passed' ? 'success' : 'error');
+        showNotification('Test execution failed!', 'error');
         
-        if (randomStatus === 'failed' || randomStatus === 'blocked') {
-            // Prompt to log a bug
-            if (confirm('Test failed. Would you like to log a bug?')) {
-                logBugForTest(testId, execution.id);
-            }
+        // Re-enable button
+        if (executeBtn) {
+            executeBtn.disabled = false;
+            executeBtn.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <i data-feather="play" class="w-4 h-4"></i>
+                    <span>Execute</span>
+                </div>
+            `;
+            feather.replace();
         }
         
-        // Refresh the page
         loadExecutableTests();
-    }, 2000);
+    }
+}
+
+function showMCPInstructionsModal(test, execution, startTime) {
+    // Create modal for MCP instructions
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center';
+    modal.id = 'mcpInstructionsModal';
+    
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full mx-4">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Execute Test in Cursor</h3>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <p class="text-sm text-blue-800 mb-2">
+                    <strong>Test prompt has been copied to your clipboard!</strong>
+                </p>
+                <p class="text-sm text-gray-700">
+                    Please follow these steps to execute the test:
+                </p>
+                <ol class="list-decimal list-inside text-sm text-gray-700 mt-2 space-y-1">
+                    <li>Switch to Cursor IDE</li>
+                    <li>Open the Playwright MCP interface</li>
+                    <li>Paste the test prompt (Ctrl+V / Cmd+V)</li>
+                    <li>Execute the test</li>
+                    <li>Return here to record the results</li>
+                </ol>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Test Status</label>
+                    <select id="mcpTestStatus" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option value="">Select Status</option>
+                        <option value="passed">Passed</option>
+                        <option value="failed">Failed</option>
+                        <option value="blocked">Blocked</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Notes/Logs (Optional)</label>
+                    <textarea id="mcpTestLogs" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Any additional notes or error messages..."></textarea>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-4 mt-6">
+                <button onclick="cancelMCPExecution('${test.id}', '${execution.id}')" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                    Cancel
+                </button>
+                <button onclick="saveMCPResults('${test.id}', '${execution.id}', ${startTime})" class="px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg">
+                    Save Results
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function cancelMCPExecution(testId, executionId) {
+    // Remove the modal
+    const modal = document.getElementById('mcpInstructionsModal');
+    if (modal) {
+        document.body.removeChild(modal);
+    }
+    
+    // Remove the in-progress execution
+    testExecutions = testExecutions.filter(e => e.id !== executionId);
+    saveExecutionsToStorage();
+    
+    // Re-enable the execute button
+    loadExecutableTests();
+    
+    showNotification('Test execution cancelled', 'info');
+}
+
+function saveMCPResults(testId, executionId, startTime) {
+    const status = document.getElementById('mcpTestStatus').value;
+    const logs = document.getElementById('mcpTestLogs').value;
+    
+    if (!status) {
+        showNotification('Please select a test status', 'error');
+        return;
+    }
+    
+    // Find the test and execution
+    const test = tests.find(t => t.id === testId);
+    const execution = testExecutions.find(e => e.id === executionId);
+    
+    if (!test || !execution) {
+        showNotification('Error saving results', 'error');
+        return;
+    }
+    
+    // Update execution
+    execution.status = status;
+    execution.duration = Date.now() - startTime;
+    execution.logs = logs || null;
+    
+    // Update test status
+    test.status = status;
+    test.lastExecuted = execution.executedAt;
+    
+    saveTestsToStorage();
+    saveExecutionsToStorage();
+    
+    // Remove modal
+    const modal = document.getElementById('mcpInstructionsModal');
+    if (modal) {
+        document.body.removeChild(modal);
+    }
+    
+    showNotification(`Test ${status}!`, status === 'passed' ? 'success' : 'error');
+    
+    if (status === 'failed' || status === 'blocked') {
+        // Prompt to log a bug
+        if (confirm('Test failed. Would you like to log a bug?')) {
+            logBugForTest(testId, executionId);
+        }
+    }
+    
+    // Refresh the page
+    loadExecutableTests();
 }
 
 // Reports Page
@@ -616,4 +802,43 @@ function showNotification(message, type) {
             document.body.removeChild(notification);
         }, 300);
     }, 3000);
+}
+
+// Add helper function to create a bridge server setup script
+function generateMCPBridgeSetup() {
+    const setupScript = `
+// MCP Bridge Server Setup
+// Save this as mcp-bridge-server.js and run with Node.js
+
+const express = require('express');
+const cors = require('cors');
+const { exec } = require('child_process');
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.post('/execute-test', async (req, res) => {
+    const { prompt } = req.body;
+    
+    try {
+        // Execute via MCP
+        exec(\`npx @playwright/mcp@latest "\${prompt}"\`, (error, stdout, stderr) => {
+            if (error) {
+                res.json({ status: 'failed', error: error.message });
+                return;
+            }
+            res.json({ status: 'passed', output: stdout });
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.listen(3001, () => {
+    console.log('MCP Bridge Server running on http://localhost:3001');
+});
+`;
+    
+    return setupScript;
 } 

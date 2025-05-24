@@ -15,6 +15,10 @@
 - [x] Implement test execution trigger
 - [x] Handle execution response (status, duration, screenshots)
 - [x] Update test status in real-time
+- [x] Integrate with Cursor Playwright MCP server
+- [x] Copy test prompt to clipboard for MCP execution
+- [x] Create instruction modal for MCP workflow
+- [x] Allow manual result recording from MCP execution
 - [x] Create results storage structure in localStorage
 - [x] Build results table with sorting/filtering
 - [x] Display execution history per test
