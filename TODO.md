@@ -18,8 +18,7 @@
 - [x] Integrate with Cursor Playwright MCP server
 - [x] Copy test prompt to clipboard for MCP execution
 - [x] Create instruction modal for MCP workflow
-- [x] Allow manual result recording from MCP execution
-- [x] Create results storage structure in localStorage
+- [x] Allow manual result recording from MCP execution- [x] Create MCP Bridge Server for automated execution- [x] Implement WebSocket for real-time updates- [x] Add bridge server status indicator- [x] Create automated test execution flow- [x] Add fallback to manual execution mode- [x] Create results storage structure in localStorage
 - [x] Build results table with sorting/filtering
 - [x] Display execution history per test
 - [x] Show test metadata (duration, screenshots, logs)

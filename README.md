@@ -10,6 +10,7 @@ A modern, lightweight test management system that leverages browser local storag
 - **Local Storage** - No backend required, all data stored in browser
 - **Visual Reports** - Charts and analytics for test execution results
 - **Bug Tracking** - Link bugs to failed test executions
+- **Real-time Updates** - WebSocket connection for live test status
 
 ### Test Categories
 - Functional
@@ -29,12 +30,26 @@ Navigate to "Test Packs" and create your test prompts with:
 - Expected results
 
 ### 2. Execute Tests with MCP
-When you click "Execute" on a test:
-1. The test prompt is automatically copied to your clipboard
-2. A modal appears with instructions
-3. Switch to Cursor IDE and paste the prompt
-4. Cursor's Playwright MCP executes the test
-5. Return to AgenticQA to record the results
+
+#### Automated Execution (Recommended)
+With the MCP Bridge Server running:
+1. Click "Execute" on a test
+2. The system automatically:
+   - Opens Cursor IDE (if possible)
+   - Sends the test to Cursor's Playwright MCP
+   - Executes the test
+   - Captures screenshots and results
+   - Updates the test status automatically
+3. Real-time updates via WebSocket connection
+
+#### Manual Execution (Fallback)
+If the bridge server is not running:
+1. Click "Execute" on a test
+2. The test prompt is copied to your clipboard
+3. A modal appears with instructions
+4. Switch to Cursor IDE and paste the prompt
+5. Execute the test manually
+6. Return to AgenticQA to record the results
 
 ### 3. View Reports
 The Reports section shows:
@@ -45,6 +60,35 @@ The Reports section shows:
 
 ### 4. Track Bugs
 Failed tests can have associated bugs that are tracked and managed in the Bugs section.
+
+## 🚀 MCP Bridge Server Setup
+
+### Prerequisites
+- Node.js installed on your system
+- Cursor IDE with Playwright MCP configured
+
+### Starting the Bridge Server
+
+#### Windows:
+```bash
+# Run the setup script
+setup-bridge.bat
+```
+
+#### Mac/Linux:
+```bash
+# Make the script executable (first time only)
+chmod +x setup-bridge.sh
+
+# Run the setup script
+./setup-bridge.sh
+```
+
+The bridge server will:
+- Install required dependencies
+- Start on http://localhost:3001
+- Enable WebSocket connection on ws://localhost:3002
+- Show connection status in the AgenticQA header
 
 ## 📋 MCP Integration Details
 
@@ -98,7 +142,16 @@ Ensure your Cursor IDE has the Playwright MCP server configured:
 
 2. Open `index.html` in a web browser
 
-3. Start creating and executing tests!
+3. (Optional) Start the MCP Bridge Server for automated execution:
+   ```bash
+   # Windows
+   setup-bridge.bat
+   
+   # Mac/Linux
+   ./setup-bridge.sh
+   ```
+
+4. Start creating and executing tests!
 
 ## 💾 Data Storage
 
@@ -114,6 +167,7 @@ All data is stored in browser localStorage with the following keys:
 - **Icons**: Feather Icons
 - **Charts**: Chart.js
 - **Font**: Inter (Google Fonts)
+- **Bridge Server**: Node.js, Express, WebSocket
 
 ## 📝 Future Enhancements
 
