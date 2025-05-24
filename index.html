@@ -5,11 +5,197 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AgenticQA - Test Management MVP</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .active-nav { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    </style>
 </head>
 <body class="bg-gray-50">
-    <div class="container mx-auto p-8">
-        <h1 class="text-4xl font-bold text-gray-800 text-center mb-4">AgenticQA</h1>
-        <p class="text-center text-gray-600">Hello World - Test Management MVP</p>
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <i data-feather="check-square" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <h1 class="text-2xl font-bold text-gray-800">AgenticQA</h1>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <span id="currentDateTime"></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="container mx-auto px-6">
+            <div class="flex space-x-8">
+                <button onclick="showPage('testPacks')" id="navTestPacks" class="nav-btn py-4 px-6 text-gray-700 font-medium hover:text-indigo-600 focus:outline-none transition-colors duration-200 border-b-2 border-transparent hover:border-indigo-600">
+                    <div class="flex items-center space-x-2">
+                        <i data-feather="package" class="w-5 h-5"></i>
+                        <span>Test Packs</span>
+                    </div>
+                </button>
+                <button onclick="showPage('execute')" id="navExecute" class="nav-btn py-4 px-6 text-gray-700 font-medium hover:text-indigo-600 focus:outline-none transition-colors duration-200 border-b-2 border-transparent hover:border-indigo-600">
+                    <div class="flex items-center space-x-2">
+                        <i data-feather="play-circle" class="w-5 h-5"></i>
+                        <span>Execute</span>
+                    </div>
+                </button>
+                <button onclick="showPage('reports')" id="navReports" class="nav-btn py-4 px-6 text-gray-700 font-medium hover:text-indigo-600 focus:outline-none transition-colors duration-200 border-b-2 border-transparent hover:border-indigo-600">
+                    <div class="flex items-center space-x-2">
+                        <i data-feather="bar-chart-2" class="w-5 h-5"></i>
+                        <span>Reports</span>
+                    </div>
+                </button>
+                <button onclick="showPage('bugs')" id="navBugs" class="nav-btn py-4 px-6 text-gray-700 font-medium hover:text-indigo-600 focus:outline-none transition-colors duration-200 border-b-2 border-transparent hover:border-indigo-600">
+                    <div class="flex items-center space-x-2">
+                        <i data-feather="alert-circle" class="w-5 h-5"></i>
+                        <span>Bugs</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Test Packs Page -->
+        <div id="testPacksPage" class="page hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Test Packs</h2>
+                <p class="text-gray-600">Create and manage your test prompts</p>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+                <button onclick="showAddTestModal()" class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-200">
+                    <div class="flex items-center space-x-2">
+                        <i data-feather="plus" class="w-5 h-5"></i>
+                        <span>Add New Test</span>
+                    </div>
+                </button>
+            </div>
+
+            <div id="testPacksList" class="grid gap-4">
+                <!-- Test packs will be dynamically loaded here -->
+            </div>
+        </div>
+
+        <!-- Execute Page -->
+        <div id="executePage" class="page hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Execute Tests</h2>
+                <p class="text-gray-600">Run your tests through Cursor IDE</p>
+            </div>
+            
+            <div id="executeTestsList" class="grid gap-4">
+                <!-- Executable tests will be listed here -->
+            </div>
+        </div>
+
+        <!-- Reports Page -->
+        <div id="reportsPage" class="page hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Test Reports</h2>
+                <p class="text-gray-600">View test execution results and analytics</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-gray-500">Total Tests</h3>
+                        <i data-feather="file-text" class="w-5 h-5 text-gray-400"></i>
+                    </div>
+                    <p class="text-3xl font-bold text-gray-800" id="totalTestsCount">0</p>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-gray-500">Pass Rate</h3>
+                        <i data-feather="trending-up" class="w-5 h-5 text-green-500"></i>
+                    </div>
+                    <p class="text-3xl font-bold text-green-600" id="passRatePercentage">0%</p>
+                </div>
+                
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-medium text-gray-500">Active Bugs</h3>
+                        <i data-feather="alert-triangle" class="w-5 h-5 text-red-500"></i>
+                    </div>
+                    <p class="text-3xl font-bold text-red-600" id="activeBugsCount">0</p>
+                </div>
+            </div>
+
+                        <div class="bg-white rounded-xl shadow-sm p-6">                <canvas id="testResultsChart" style="height: 300px;"></canvas>            </div>
+        </div>
+
+        <!-- Bugs Page -->
+        <div id="bugsPage" class="page hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Bug Tracker</h2>
+                <p class="text-gray-600">Track and manage bugs found during testing</p>
+            </div>
+            
+            <div id="bugsList" class="grid gap-4">
+                <!-- Bugs will be listed here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Test Modal -->
+    <div id="addTestModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-2xl font-bold text-gray-800 mb-6">Add New Test</h3>
+            
+            <form id="addTestForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Test Name</label>
+                    <input type="text" id="testName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Test Type</label>
+                    <select id="testType" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required>
+                        <option value="">Select Type</option>
+                        <option value="functional">Functional</option>
+                        <option value="regression">Regression</option>
+                        <option value="integration">System Integration</option>
+                        <option value="smoke">Smoke Test</option>
+                        <option value="performance">Performance</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Feature/Module</label>
+                    <input type="text" id="testModule" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Test Prompt</label>
+                    <textarea id="testPrompt" rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Expected Results</label>
+                    <textarea id="expectedResults" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button type="button" onclick="closeAddTestModal()" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg">
+                        Save Test
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
+
+    <script src="app.js"></script>
 </body>
 </html> 
