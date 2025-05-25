@@ -22,22 +22,24 @@ A modern, lightweight test management system that leverages browser local storag
 
 ## 🔧 How It Works
 
-### 1. Start Playwright MCP Server (Optional but Recommended)
-For automated test execution, start the Playwright MCP server:
+### 1. Configure Playwright MCP in Cursor IDE
+The Playwright MCP integration works through Cursor IDE, not directly with the web app.
 
-**Windows:**
-```bash
-# Double-click start-playwright-mcp.bat
-# OR run in command prompt:
-npx @playwright/mcp@latest --port 8998
+**Setup in Cursor IDE:**
+1. Install Playwright MCP in Cursor by going to Settings → MCP → Add Server
+2. Configure it with:
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+  }
+}
 ```
 
-**Mac/Linux:**
-```bash
-npx @playwright/mcp@latest --port 8998
-```
-
-The MCP status indicator in the header will show "MCP Connected" when the server is running.
+**Note:** The MCP status in AgenticQA will show "MCP Offline" because direct browser-to-MCP connections are not supported. MCP servers communicate through IDE clients like Cursor, not web browsers.
 
 ### 2. Open AgenticQA
 Simply open `index.html` in your web browser. No additional installation required!
@@ -53,17 +55,17 @@ Navigate to "Test Packs" and create your test prompts with:
 ### 4. Execute Tests
 When you click "Execute" on a test:
 
-**If MCP is Connected (Automated):**
-- AgenticQA automatically executes the test via Playwright MCP
-- Browser actions are performed automatically
-- Screenshots are captured
-- Results are displayed immediately
+**Manual Execution through Cursor IDE:**
+1. A modal appears with the test prompt
+2. Copy the prompt to your clipboard
+3. Paste it into Cursor IDE (with Playwright MCP enabled)
+4. Cursor will execute the test using Playwright MCP
+5. Copy the results from Cursor
+6. Paste them back into AgenticQA
+7. Results are parsed and stored automatically
 
-**If MCP is Offline (Manual):**
-- A modal appears with test instructions
-- Copy the prompt to Cursor IDE
-- Execute manually and paste results back
-- Results are parsed and stored
+**Why Manual?**
+MCP (Model Context Protocol) is designed to work through IDE clients like Cursor, not directly from web browsers. This ensures security and proper integration with AI assistants.
 
 ### 5. View Reports
 The Reports section provides:

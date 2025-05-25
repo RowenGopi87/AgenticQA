@@ -364,266 +364,22 @@ async function executeTest(testId) {
     // Update UI to show test is running
     loadExecutableTests();
     
-    // Check if Playwright MCP is available
-    const mcpAvailable = await checkPlaywrightMCP();
-    
-    if (mcpAvailable) {
-        // Execute directly via Playwright MCP
-        executeTestWithPlaywrightMCP(test, execution);
-    } else {
-        // Fall back to manual execution
-        showExecutionModal(test, execution);
-    }
+    // Always use manual execution through Cursor IDE
+    showExecutionModal(test, execution);
 }
 
 // Check if Playwright MCP server is running
 async function checkPlaywrightMCP() {
-    try {
-        const response = await fetch('http://localhost:8998/mcp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'browser_snapshot',
-                params: {}
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            return !data.error;
-        }
-        return false;
-    } catch (error) {
-        return false;
-    }
+    // For now, we'll assume MCP is available if we're running locally
+    // The actual MCP connection happens through Cursor IDE, not direct HTTP
+    // This is a placeholder that always returns false to use manual mode
+    return false;
+    
+    // TODO: In the future, implement proper MCP client using WebSocket or SSE
+    // MCP servers don't expose a simple HTTP endpoint for status checks
 }
 
-// Execute test using Playwright MCP
-async function executeTestWithPlaywrightMCP(test, execution) {
-    const startTime = Date.now();
-    
-    try {
-        showNotification('Executing test via Playwright MCP...', 'info');
-        
-        // Parse test prompt to extract URL and actions
-        const testData = parseTestPrompt(test.prompt);
-        
-        // 1. Navigate to the test URL
-        let response = await fetch('http://localhost:8998/mcp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 1,
-                method: 'browser_navigate',
-                params: {
-                    url: testData.url || 'https://example.com'
-                }
-            })
-        });
-        
-        if (!response.ok) throw new Error('Failed to navigate');
-        
-        // 2. Wait for page to load
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        // 3. Take initial snapshot
-        response = await fetch('http://localhost:8998/mcp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'browser_snapshot',
-                params: {}
-            })
-        });
-        
-        const snapshot = await response.json();
-        
-        // 4. Execute test actions
-        const steps = [];
-        for (let i = 0; i < testData.actions.length; i++) {
-            const action = testData.actions[i];
-            const step = {
-                action: action.description,
-                status: 'in_progress'
-            };
-            
-            try {
-                if (action.type === 'click') {
-                    response = await fetch('http://localhost:8998/mcp', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: i + 3,
-                            method: 'browser_click',
-                            params: {
-                                element: action.element,
-                                ref: findElementRef(snapshot.result, action.element)
-                            }
-                        })
-                    });
-                } else if (action.type === 'type') {
-                    response = await fetch('http://localhost:8998/mcp', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: i + 3,
-                            method: 'browser_type',
-                            params: {
-                                element: action.element,
-                                ref: findElementRef(snapshot.result, action.element),
-                                text: action.text
-                            }
-                        })
-                    });
-                } else if (action.type === 'wait') {
-                    response = await fetch('http://localhost:8998/mcp', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            jsonrpc: '2.0',
-                            id: i + 3,
-                            method: 'browser_wait_for',
-                            params: {
-                                time: action.time || 2
-                            }
-                        })
-                    });
-                }
-                
-                step.status = 'passed';
-                step.duration = Date.now() - startTime;
-            } catch (error) {
-                step.status = 'failed';
-                step.error = error.message;
-            }
-            
-            steps.push(step);
-        }
-        
-        // 5. Take final screenshot
-        response = await fetch('http://localhost:8998/mcp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 100,
-                method: 'browser_take_screenshot',
-                params: {
-                    raw: false
-                }
-            })
-        });
-        
-        const screenshotResult = await response.json();
-        
-        // Update execution record
-        execution.status = steps.every(s => s.status === 'passed') ? 'passed' : 'failed';
-        execution.duration = Date.now() - startTime;
-        execution.steps = steps;
-        execution.screenshots = screenshotResult.result ? [screenshotResult.result] : [];
-        execution.logs = ['Test executed via Playwright MCP'];
-        
-        // Update test status
-        const testToUpdate = tests.find(t => t.id === test.id);
-        if (testToUpdate) {
-            testToUpdate.status = execution.status;
-            testToUpdate.lastExecuted = execution.executedAt;
-        }
-        
-        saveTestsToStorage();
-        saveExecutionsToStorage();
-        
-        showNotification(`Test ${execution.status}!`, execution.status === 'passed' ? 'success' : 'error');
-        
-        if (execution.status === 'failed') {
-            if (confirm('Test failed. Would you like to log a bug?')) {
-                showBugModal(test.id, execution.id);
-            }
-        }
-        
-        // Refresh UI
-        loadExecutableTests();
-        
-    } catch (error) {
-        console.error('MCP execution error:', error);
-        execution.status = 'failed';
-        execution.duration = Date.now() - startTime;
-        execution.logs = [`Error: ${error.message}`];
-        
-        saveExecutionsToStorage();
-        showNotification('Test execution failed: ' + error.message, 'error');
-        
-        // Fall back to manual execution
-        showExecutionModal(test, execution);
-    }
-}
 
-// Parse test prompt to extract actions
-function parseTestPrompt(prompt) {
-    const data = {
-        url: null,
-        actions: []
-    };
-    
-    // Extract URL
-    const urlMatch = prompt.match(/(?:navigate to|go to|open)\s+(https?:\/\/[^\s]+)/i);
-    if (urlMatch) {
-        data.url = urlMatch[1];
-    }
-    
-    // Extract actions
-    const lines = prompt.split('\n');
-    lines.forEach(line => {
-        const trimmedLine = line.trim().toLowerCase();
-        
-        if (trimmedLine.includes('click')) {
-            const elementMatch = line.match(/click (?:on |the )?"?([^"]+)"?/i);
-            if (elementMatch) {
-                data.actions.push({
-                    type: 'click',
-                    element: elementMatch[1].trim(),
-                    description: line.trim()
-                });
-            }
-        } else if (trimmedLine.includes('type') || trimmedLine.includes('enter')) {
-            const typeMatch = line.match(/(?:type|enter)\s+"([^"]+)"(?:\s+in(?:to)?\s+"?([^"]+)"?)?/i);
-            if (typeMatch) {
-                data.actions.push({
-                    type: 'type',
-                    text: typeMatch[1],
-                    element: typeMatch[2] || 'input field',
-                    description: line.trim()
-                });
-            }
-        } else if (trimmedLine.includes('wait')) {
-            const waitMatch = line.match(/wait\s+(?:for\s+)?(\d+)/i);
-            if (waitMatch) {
-                data.actions.push({
-                    type: 'wait',
-                    time: parseInt(waitMatch[1]),
-                    description: line.trim()
-                });
-            }
-        }
-    });
-    
-    return data;
-}
-
-// Find element reference in snapshot
-function findElementRef(snapshot, elementDescription) {
-    // This is a simplified version - in reality, you'd need to parse the snapshot
-    // and find the element that matches the description
-    // For now, we'll return a placeholder
-    return elementDescription.toLowerCase().replace(/\s+/g, '_');
-}
 
 function showExecutionModal(test, execution) {
     const modal = document.createElement('div');
@@ -681,7 +437,7 @@ function showExecutionModal(test, execution) {
 }
 
 function generateMCPPrompt(test) {
-    return `Execute the following test using Playwright:
+    return `Execute the following test using Playwright MCP tools:
 
 Test Name: ${test.name}
 Module: ${test.module}
@@ -693,12 +449,30 @@ ${test.prompt}
 Expected Results:
 ${test.expectedResults}
 
-Please execute this test and return the results in JSON format including:
-- Overall status (passed/failed/blocked)
-- Execution duration
-- Step-by-step results with screenshots if applicable
-- Any error logs or messages
-- Validation of expected results`;
+Instructions:
+1. Use browser_navigate to go to the URL
+2. Use browser_snapshot to capture the page state
+3. Use browser_click, browser_type, etc. for interactions
+4. Use browser_take_screenshot to capture evidence
+5. Validate the expected results
+
+Return the results in this JSON format:
+{
+  "status": "passed" or "failed" or "blocked",
+  "duration": <milliseconds>,
+  "steps": [
+    {
+      "action": "Navigate to homepage",
+      "status": "passed",
+      "screenshot": "<base64_image_data>"
+    }
+  ],
+  "logs": ["Test started", "All assertions passed"],
+  "validationResults": {
+    "passed": true,
+    "details": "All expected results matched"
+  }
+}`;
 }
 
 function copyToClipboard(text) {
