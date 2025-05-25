@@ -22,10 +22,11 @@ function initializeApp() {
     setInterval(updateDateTime, 1000);
     setupEventListeners();
     
-    // Initialize WebSocket and check bridge server status
-    initializeWebSocket(); // Attempt to connect immediately
-    checkBridgeServer(); // Initial check
-    setInterval(checkBridgeServer, 5000); // Periodically check bridge server status every 5 seconds
+    // Initialize integrations
+    initializeBridgeDetection();
+    initializeWebSocket();
+    checkBridgeServer();
+    setInterval(checkBridgeServer, 5000);
 }
 
 // Setup event listeners
@@ -482,8 +483,11 @@ async function executeTest(testId) {
     // Update UI to show test is running
     loadExecutableTests();
     
-    // Check if MCP integration is available
-    if (window.AgenticQAMCP && window.AgenticQAMCP.isAvailable()) {
+    // Check available execution methods in order of preference
+    if (window.AgenticQABridge && window.AgenticQABridge.isAvailable()) {
+        // Use browser extension bridge to Cursor
+        executeTestWithBridge(test, execution);
+    } else if (window.AgenticQAMCP && window.AgenticQAMCP.isAvailable()) {
         // Use direct MCP integration
         executeTestWithDirectMCP(test, execution);
     } else {
@@ -492,26 +496,30 @@ async function executeTest(testId) {
     }
 }
 
-// Direct MCP execution
-async function executeTestWithDirectMCP(test, execution) {
+// Execute test using browser extension bridge
+async function executeTestWithBridge(test, execution) {
     try {
-        showNotification('Executing test via Playwright MCP...', 'info');
+        showNotification('Sending test to Cursor IDE...', 'info');
         
         const startTime = Date.now();
+        const prompt = generateMCPPrompt(test);
         
-        // Execute through MCP
-        const result = await window.AgenticQAMCP.executeTest({
-            prompt: generateMCPPrompt(test),
-            metadata: {
-                testId: test.id,
-                executionId: execution.id,
-                name: test.name,
-                module: test.module,
-                type: test.type
-            }
-        });
+        // Execute through browser extension bridge
+        const result = await window.AgenticQABridge.executeTest(test, prompt);
         
-        // Update execution with results
+        if (result.status === 'manual_execution_required') {
+            // Extension copied prompt to clipboard, show instructions
+            showNotification(result.message, 'info');
+            
+            // Show modal for manual result entry
+            showExecutionModal(test, execution, {
+                prefilledPrompt: prompt,
+                clipboardCopied: true
+            });
+            return;
+        }
+        
+        // Process automated result
         execution.status = result.status || 'completed';
         execution.duration = Date.now() - startTime;
         execution.screenshots = result.screenshots || [];
@@ -539,19 +547,19 @@ async function executeTestWithDirectMCP(test, execution) {
         loadExecutableTests();
         
     } catch (error) {
-        console.error('MCP execution failed:', error);
+        console.error('Bridge execution failed:', error);
         execution.status = 'failed';
-        execution.logs = [`MCP execution error: ${error.message}`];
+        execution.logs = [`Bridge execution error: ${error.message}`];
         saveExecutionsToStorage();
         
-        showNotification('MCP execution failed. Falling back to manual mode.', 'error');
+        showNotification('Bridge execution failed. Falling back to manual mode.', 'error');
         
         // Fall back to manual execution
         showExecutionModal(test, execution);
     }
 }
 
-function showExecutionModal(test, execution) {
+function showExecutionModal(test, execution, options = {}) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center';
     modal.id = `execution-modal-${execution.id}`;
@@ -573,9 +581,9 @@ function showExecutionModal(test, execution) {
             <div class="mb-6">
                 <h4 class="font-semibold text-gray-800 mb-2">Test Prompt:</h4>
                 <div class="bg-gray-100 rounded-lg p-4">
-                    <pre class="whitespace-pre-wrap text-sm text-gray-700">${generateMCPPrompt(test)}</pre>
+                    <pre class="whitespace-pre-wrap text-sm text-gray-700">${options.prefilledPrompt || generateMCPPrompt(test)}</pre>
                 </div>
-                <button onclick="copyToClipboard('${escapeQuotes(generateMCPPrompt(test))}')" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800">
+                <button onclick="copyToClipboard('${escapeQuotes(options.prefilledPrompt || generateMCPPrompt(test))}')" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800">
                     <i data-feather="copy" class="w-4 h-4 inline"></i> Copy Prompt
                 </button>
             </div>
@@ -1490,4 +1498,58 @@ function showNotification(message, type) {
             notification.remove();
         }, 300);
     }, 3000);
+}
+
+// Initialize bridge detection
+function initializeBridgeDetection() {
+    // Listen for bridge ready event
+    window.addEventListener('agenticqa-bridge-ready', function() {
+        console.log('AgenticQA Bridge is ready');
+        updateBridgeStatusIndicator(true);
+    });
+    
+    // Check if bridge is already available
+    if (window.AgenticQABridge && window.AgenticQABridge.isAvailable()) {
+        updateBridgeStatusIndicator(true);
+    }
+    
+    // Periodic check for bridge availability
+    setInterval(checkBridgeAvailability, 5000);
+}
+
+// Check bridge availability
+function checkBridgeAvailability() {
+    const available = window.AgenticQABridge && window.AgenticQABridge.isAvailable();
+    updateBridgeStatusIndicator(available);
+}
+
+// Update bridge status indicator
+function updateBridgeStatusIndicator(available) {
+    const statusDot = document.getElementById('mcpStatusDot');
+    const statusText = document.getElementById('mcpStatusText');
+    
+    if (!statusDot || !statusText) return;
+    
+    if (available) {
+        statusDot.classList.remove('bg-gray-400', 'bg-red-500');
+        statusDot.classList.add('bg-green-500');
+        statusText.textContent = 'Cursor Bridge Ready';
+        statusText.classList.remove('text-gray-500', 'text-red-600');
+        statusText.classList.add('text-green-600');
+    } else {
+        // Check if MCP is available as fallback
+        if (window.AgenticQAMCP && window.AgenticQAMCP.isAvailable()) {
+            statusDot.classList.remove('bg-gray-400', 'bg-red-500');
+            statusDot.classList.add('bg-yellow-500');
+            statusText.textContent = 'MCP Available';
+            statusText.classList.remove('text-gray-500', 'text-red-600');
+            statusText.classList.add('text-yellow-600');
+        } else {
+            statusDot.classList.remove('bg-green-500', 'bg-yellow-500');
+            statusDot.classList.add('bg-gray-400');
+            statusText.textContent = 'Manual Mode';
+            statusText.classList.remove('text-green-600', 'text-yellow-600');
+            statusText.classList.add('text-gray-500');
+        }
+    }
 } 

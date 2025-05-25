@@ -2,11 +2,13 @@
   "manifest_version": 3,
   "name": "AgenticQA MCP Bridge",
   "version": "1.0.0",
-  "description": "Bridge between AgenticQA and Playwright MCP",
+  "description": "Bridge between AgenticQA and Cursor IDE",
   "permissions": [
     "nativeMessaging",
     "tabs",
-    "activeTab"
+    "activeTab",
+    "notifications",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "http://localhost/*",

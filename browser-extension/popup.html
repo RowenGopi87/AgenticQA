@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            width: 300px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #f5f5f5;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .status-dot.green { background: #10b981; }
+        .status-dot.yellow { background: #f59e0b; }
+        .status-dot.gray { background: #6b7280; }
+        .button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: none;
+            border-radius: 6px;
+            background: #4f46e5;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #4338ca;
+        }
+        .button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .info {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3>AgenticQA Bridge</h3>
+    </div>
+    
+    <div class="status">
+        <div class="status-dot gray" id="statusDot"></div>
+        <span id="statusText">Checking status...</span>
+    </div>
+    
+    <button class="button" id="testConnection">Test Connection</button>
+    <button class="button" id="openCursor">Open Cursor IDE</button>
+    <button class="button" id="openAgenticQA">Open AgenticQA</button>
+    
+    <div class="info">
+        <p><strong>How to use:</strong></p>
+        <ol>
+            <li>Open AgenticQA in a browser tab</li>
+            <li>Create and execute a test</li>
+            <li>Prompt will be copied to clipboard automatically</li>
+            <li>Paste in Cursor Chat (Ctrl+I)</li>
+        </ol>
+    </div>
+
+    <script>
+        // Update status
+        function updateStatus(available, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            dot.className = 'status-dot ' + (available ? 'green' : 'gray');
+            statusText.textContent = text;
+        }
+
+        // Check connection status
+        async function checkStatus() {
+            try {
+                // Check if we can communicate with content scripts
+                const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+                if (tabs.length > 0) {
+                    updateStatus(true, 'Extension Active');
+                } else {
+                    updateStatus(false, 'No Active Tab');
+                }
+            } catch (error) {
+                updateStatus(false, 'Extension Error');
+            }
+        }
+
+        // Event listeners
+        document.getElementById('testConnection').addEventListener('click', checkStatus);
+        
+        document.getElementById('openCursor').addEventListener('click', () => {
+            chrome.tabs.create({url: 'cursor://open'}).catch(() => {
+                alert('Cannot open Cursor automatically. Please open it manually.');
+            });
+        });
+        
+        document.getElementById('openAgenticQA').addEventListener('click', () => {
+            chrome.tabs.create({url: 'file://' + chrome.runtime.getURL('../index.html')}).catch(() => {
+                alert('Please open AgenticQA manually by opening index.html in your browser.');
+            });
+        });
+
+        // Initialize
+        checkStatus();
+    </script>
+</body>
+</html> 

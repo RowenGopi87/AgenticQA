@@ -23,19 +23,38 @@ A modern, lightweight test management system that leverages browser local storag
 
 AgenticQA integrates seamlessly with Cursor IDE's Playwright MCP for automated test execution:
 
-### Quick Setup
+### 🚀 Automatic Integration (No Manual Copying!)
+
+**Option 1: Browser Extension (Recommended)**
+1. Install the AgenticQA Browser Extension (see `docs/browser-extension-setup.md`)
+2. Extension automatically copies prompts to clipboard and shows notifications
+3. Just paste in Cursor Chat (Ctrl+I) - no manual copying needed!
+
+**Option 2: Direct API Integration**
+- If Cursor exposes a local API, AgenticQA can send prompts directly
+- Fully automated execution without any manual steps
+- Currently experimental - falls back to clipboard method
+
+### 📋 Manual Integration (Fallback)
 1. **Install Playwright MCP**: `npm install -g @playwright/mcp@latest`
 2. **Configure Cursor**: Add Playwright MCP in Cursor Settings → Features → MCP Servers
 3. **Execute Tests**: Copy prompts from AgenticQA and run them in Cursor Chat
 
-### Workflow
+### 🔄 Workflow
 1. Create tests in AgenticQA with natural language instructions
-2. Click "Execute" to get a formatted prompt for Cursor
-3. Paste the prompt in Cursor IDE chat (Cmd/Ctrl + I)
-4. Cursor uses Playwright MCP tools to execute the test automatically
-5. Copy the JSON results back to AgenticQA for storage and reporting
+2. Click "Execute" - AgenticQA will:
+   - 🟢 **Auto-copy to clipboard** (with browser extension)
+   - 🟡 **Show formatted prompt** (manual mode)
+3. In Cursor IDE: Open chat (Ctrl+I) and paste
+4. Cursor uses Playwright MCP tools to execute automatically
+5. Copy JSON results back to AgenticQA for storage and reporting
 
-### Example Test Execution
+### 📊 Status Indicators
+- 🟢 **Cursor Bridge Ready**: Browser extension active
+- 🟡 **MCP Available**: Direct MCP integration available  
+- ⚪ **Manual Mode**: Copy/paste required
+
+### 🎯 Example Test Execution
 ```
 Test: Login Functionality
 Instructions: 
@@ -45,10 +64,16 @@ Instructions:
 4. Click Login button
 5. Verify dashboard loads
 
-Result: Cursor automatically executes using browser_navigate, browser_type, browser_click, and browser_snapshot tools
+Result: 
+- Extension copies prompt to clipboard automatically
+- Cursor executes using browser_navigate, browser_type, browser_click tools
+- Results returned as JSON for AgenticQA storage
 ```
 
-For detailed setup instructions, see `docs/cursor-quickstart.md`
+**Setup Guides:**
+- Browser Extension: `docs/browser-extension-setup.md`
+- Cursor MCP Config: `docs/cursor-quickstart.md`
+- Manual Setup: `docs/playwright-mcp-setup.md`
 
 ## 🔧 How It Works
 
