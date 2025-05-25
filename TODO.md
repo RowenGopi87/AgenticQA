@@ -11,14 +11,17 @@
 - [x] Add expected results input field
 - [x] Implement localStorage save/load functionality
 - [x] Create test list view with edit/delete options
-- [x] Design API call structure for Cursor IDE integration
+- [x] Design API call structure for MCP integration
 - [x] Implement test execution trigger
 - [x] Handle execution response (status, duration, screenshots)
 - [x] Update test status in real-time
-- [x] Integrate with Cursor Playwright MCP server
-- [x] Copy test prompt to clipboard for MCP execution
-- [x] Create instruction modal for MCP workflow
-- [x] Allow manual result recording from MCP execution- [x] Create MCP Bridge Server for automated execution- [x] Implement WebSocket for real-time updates- [x] Add bridge server status indicator- [x] Create automated test execution flow- [x] Add fallback to manual execution mode- [x] Create results storage structure in localStorage
+- [x] Create MCP Bridge Server for direct Playwright MCP communication
+- [x] Implement WebSocket for real-time updates between web app and bridge server
+- [x] Add bridge server status indicator to UI
+- [x] Implement direct test execution flow via bridge to Playwright MCP
+- [x] Spawn and manage Playwright MCP process from bridge server
+- [x] Communicate with MCP process via stdin/stdout
+- [x] Create results storage structure in localStorage
 - [x] Build results table with sorting/filtering
 - [x] Display execution history per test
 - [x] Show test metadata (duration, screenshots, logs)
@@ -38,8 +41,11 @@
 - [ ] Add test type filters
 - [ ] Create execution duration analytics
 
-### Final Polish
+### Final Polish & MCP Refinement
+- [ ] Refine `sendToMCP` in bridge server with actual Playwright MCP I/O protocol
+- [ ] Implement robust error handling for MCP communication
+- [ ] Design UI for displaying detailed step-by-step results from MCP (including screenshots)
 - [ ] Add data export functionality
 - [ ] Implement data import capability
-- [ ] Create help/documentation section
+- [ ] Create help/documentation section within the app
 - [ ] Performance optimization for large datasets 

@@ -22,26 +22,10 @@ function initializeApp() {
     setInterval(updateDateTime, 1000);
     setupEventListeners();
     
-    // Check for bridge server and initialize WebSocket
-    checkBridgeServer().then(available => {
-        if (available) {
-            initializeWebSocket();
-            showNotification('Connected to MCP Bridge Server', 'success');
-        }
-    });
-    
-    // Periodically check bridge server status
-    setInterval(async () => {
-        const wasAvailable = bridgeServerAvailable;
-        const isAvailable = await checkBridgeServer();
-        
-        if (!wasAvailable && isAvailable) {
-            initializeWebSocket();
-            showNotification('MCP Bridge Server is now available', 'success');
-        } else if (wasAvailable && !isAvailable) {
-            showNotification('MCP Bridge Server disconnected', 'warning');
-        }
-    }, 10000); // Check every 10 seconds
+    // Initialize WebSocket and check bridge server status
+    initializeWebSocket(); // Attempt to connect immediately
+    checkBridgeServer(); // Initial check
+    setInterval(checkBridgeServer, 5000); // Periodically check bridge server status every 5 seconds
 }
 
 // Setup event listeners
@@ -313,23 +297,26 @@ function updateBridgeStatusIndicator(connected) {
         statusText.textContent = 'Bridge Connected';
         statusText.classList.remove('text-gray-500', 'text-red-600');
         statusText.classList.add('text-green-600');
+        bridgeServerAvailable = true;
     } else {
         statusDot.classList.remove('bg-green-500');
         statusDot.classList.add('bg-red-500');
         statusText.textContent = 'Bridge Disconnected';
         statusText.classList.remove('text-green-600');
         statusText.classList.add('text-red-600');
+        bridgeServerAvailable = false;
     }
 }
 
 // Initialize WebSocket connection
 function initializeWebSocket() {
-    if (ws) return;
+    if (ws && ws.readyState === WebSocket.OPEN) return;
     
     ws = new WebSocket('ws://localhost:3002');
     
     ws.onopen = () => {
         console.log('WebSocket connected to MCP Bridge');
+        // No need to update indicator here, checkBridgeServer handles it
     };
     
     ws.onmessage = (event) => {
@@ -339,30 +326,41 @@ function initializeWebSocket() {
     
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        // Bridge status will be updated by checkBridgeServer
     };
     
     ws.onclose = () => {
         console.log('WebSocket disconnected');
         ws = null;
-        // Try to reconnect after 5 seconds
-        setTimeout(initializeWebSocket, 5000);
+        bridgeServerAvailable = false; // Explicitly set to false
+        updateBridgeStatusIndicator(false);
+        // Try to reconnect only if bridge server is deemed available by http check
+        // This prevents constant reconnection attempts if server is genuinely down.
     };
 }
 
 // Handle WebSocket messages
 function handleWebSocketMessage(data) {
+    console.log('Received WebSocket message:', data);
     switch (data.type) {
-        case 'test_started':
-            showNotification('Test execution started...', 'info');
+        case 'bridge_status':
+            updateBridgeStatusIndicator(data.mcpReady);
             break;
-        case 'cursor_opened':
-            showNotification(data.message, 'info');
+        case 'test_started':
+            showNotification('Test execution started via MCP Bridge...', 'info');
             break;
         case 'test_completed':
             handleTestCompletion(data);
             break;
+        case 'test_error':
+            showNotification(`Test Error: ${data.error}`, 'error');
+            // Re-enable button on error if a specific testId is part of data
+            if(data.testId) {
+                updateExecuteButton(data.testId, false);
+            }
+            break;
         default:
-            console.log('Unknown WebSocket message:', data);
+            console.log('Unknown WebSocket message type:', data.type);
     }
 }
 
@@ -413,182 +411,72 @@ async function executeTest(testId) {
     const test = tests.find(t => t.id === testId);
     if (!test) return;
     
-    // Check if bridge server is available
-    const serverAvailable = await checkBridgeServer();
-    
-    if (serverAvailable) {
-        // Use automated execution
-        await executeTestAutomated(test);
-    } else {
-        // Fall back to manual execution
-        await executeTestManual(test);
+    if (!bridgeServerAvailable) {
+        showNotification('MCP Bridge Server is not available. Please start it.', 'error');
+        // Optionally, you could fall back to manual mode here if desired.
+        // For now, we just inform the user.
+        // await executeTestManual(test); 
+        return;
     }
+    
+    // Proceed with automated execution
+    await executeTestAutomated(test);
 }
 
 // Automated test execution via bridge server
 async function executeTestAutomated(test) {
-    showNotification('Starting automated test execution...', 'info');
+    showNotification('Sending test to MCP Bridge Server...', 'info');
     
-    // Create execution record
     const execution = {
         id: generateId(),
         testId: test.id,
         status: 'in_progress',
         executedAt: new Date().toISOString(),
         duration: null,
-        screenshot: null,
-        logs: null
+        screenshots: [],
+        logs: null,
+        validationResults: null
     };
     
     testExecutions.push(execution);
     saveExecutionsToStorage();
-    
-    // Update UI
     updateExecuteButton(test.id, true);
     
     try {
-        // Format the test prompt
-        const formattedPrompt = `
-Execute this Playwright test:
-
-Test Name: ${test.name}
-Test Type: ${test.type}
-Module: ${test.module}
-
-Test Instructions:
-${test.prompt}
-
-Expected Results:
-${test.expectedResults}
-
-Please:
-1. Navigate to the appropriate page/URL
-2. Perform the test actions as described
-3. Verify the expected results
-4. Return the test status (passed/failed/blocked) and any relevant screenshots or logs
-`;
-
-        // Try to open Cursor IDE with the prompt
-        const cursorResponse = await fetch('http://localhost:3001/api/open-cursor', { 
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ testPrompt: formattedPrompt })
-        });
-        
-        const cursorResult = await cursorResponse.json();
-        
-        if (cursorResult.success) {
-            showNotification('Cursor IDE opened with test prompt. Check Agent Mode.', 'success');
-        } else {
-            showNotification(cursorResult.message || 'Please paste the prompt in Cursor Agent Mode', 'warning');
-        }
-        
-        // Send test to bridge server for execution
         const response = await fetch('http://localhost:3001/api/execute-test', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(test)
         });
         
         if (!response.ok) {
-            throw new Error('Failed to execute test');
+            const errorData = await response.json().catch(() => ({ error: 'Request failed with status: ' + response.status }));
+            throw new Error(errorData.error || 'Failed to send test to bridge server.');
         }
         
-        // The WebSocket will handle the completion
-        showNotification('Test sent to MCP for execution', 'info');
+        // Response from this endpoint is now minimal, actual results come via WebSocket
+        console.log('Test successfully sent to bridge server.');
+        // UI will be updated via WebSocket messages (`test_completed` or `test_error`)
         
     } catch (error) {
-        console.error('Automated execution failed:', error);
-        
-        // Update execution with error
+        console.error('Automated execution request failed:', error);
         execution.status = 'failed';
         execution.logs = `Automated execution error: ${error.message}`;
         saveExecutionsToStorage();
-        
-        // Update UI
         updateExecuteButton(test.id, false);
-        
-        showNotification('Automated execution failed, use manual mode', 'error');
-        
-        // Fall back to manual execution
-        await executeTestManual(test);
+        showNotification(`Error: ${error.message}`, 'error');
+        // No fallback to manual mode here, as bridge server was deemed available
     }
 }
 
-// Manual test execution (existing implementation)
-async function executeTestManual(test) {
-    showNotification('Bridge server not available. Using manual mode...', 'info');
-    
-    // Create execution record
-    const execution = {
-        id: generateId(),
-        testId: test.id,
-        status: 'in_progress',
-        executedAt: new Date().toISOString(),
-        duration: null,
-        screenshot: null,
-        logs: null
-    };
-    
-    testExecutions.push(execution);
-    saveExecutionsToStorage();
-    
-    // Update UI
-    updateExecuteButton(test.id, true);
-    
-    const startTime = Date.now();
-    
-    try {
-        // Format prompt for clipboard
-        const formattedPrompt = `
-Execute this Playwright test:
-
-Test Name: ${test.name}
-Test Type: ${test.type}
-Module: ${test.module}
-
-Test Instructions:
-${test.prompt}
-
-Expected Results:
-${test.expectedResults}
-
-Please:
-1. Navigate to the appropriate page/URL
-2. Perform the test actions as described
-3. Verify the expected results
-4. Return the test status (passed/failed/blocked) and any relevant screenshots or logs
-`;
-
-        // Copy to clipboard
-        await navigator.clipboard.writeText(formattedPrompt);
-        
-        // Show manual instructions modal
-        showMCPInstructionsModal(test, execution, startTime);
-        
-    } catch (error) {
-        console.error('Error executing test:', error);
-        
-        execution.status = 'failed';
-        execution.duration = Date.now() - startTime;
-        execution.logs = `Error: ${error.message}`;
-        
-        test.status = 'failed';
-        test.lastExecuted = execution.executedAt;
-        
-        saveTestsToStorage();
-        saveExecutionsToStorage();
-        
-        showNotification('Test execution failed!', 'error');
-        
-        updateExecuteButton(test.id, false);
-        loadExecutableTests();
-    }
-}
+// Manual test execution (kept for potential fallback or alternative mode)
+// Ensure showMCPInstructionsModal, cancelMCPExecution, saveMCPResults are defined if this is used.
+/* 
+async function executeTestManual(test) { ... existing manual code ... }
+function showMCPInstructionsModal(test, execution, startTime) { ... }
+function cancelMCPExecution(testId, executionId) { ... }
+function saveMCPResults(testId, executionId, startTime) { ... }
+*/
 
 // Update execute button state
 function updateExecuteButton(testId, isRunning) {
