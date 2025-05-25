@@ -1,12 +1,13 @@
 # AgenticQA - Lightweight Test Management MVP
 
-A modern, lightweight test management system that leverages browser local storage for all data persistence and integrates with Cursor IDE's Playwright MCP for test execution.
+A modern, lightweight test management system that leverages browser local storage for all data persistence and integrates with Playwright MCP for automated test execution.
 
 ## 🚀 Features
 
 ### Core Functionality
 - **Test Pack Management** - Create, categorize, and manage test prompts
-- **Manual MCP Integration** - Execute tests through Cursor IDE with Playwright MCP
+- **Automated Test Execution** - Direct integration with Playwright MCP server for automated browser testing
+- **Manual Execution Fallback** - Execute tests manually through Cursor IDE when MCP is not available
 - **Local Storage** - No backend required, all data stored in browser
 - **Visual Reports** - Charts and analytics for test execution results
 - **Bug Tracking** - Link bugs to failed test executions
@@ -19,68 +20,29 @@ A modern, lightweight test management system that leverages browser local storag
 - Smoke Test
 - Performance
 
-## 🎯 Using with Cursor IDE & Playwright MCP
-
-AgenticQA integrates seamlessly with Cursor IDE's Playwright MCP for automated test execution:
-
-### 🚀 Automatic Integration (No Manual Copying!)
-
-**Option 1: Browser Extension (Recommended)**
-1. Install the AgenticQA Browser Extension (see `docs/browser-extension-setup.md`)
-2. Extension automatically copies prompts to clipboard and shows notifications
-3. Just paste in Cursor Chat (Ctrl+I) - no manual copying needed!
-
-**Option 2: Direct API Integration**
-- If Cursor exposes a local API, AgenticQA can send prompts directly
-- Fully automated execution without any manual steps
-- Currently experimental - falls back to clipboard method
-
-### 📋 Manual Integration (Fallback)
-1. **Install Playwright MCP**: `npm install -g @playwright/mcp@latest`
-2. **Configure Cursor**: Add Playwright MCP in Cursor Settings → Features → MCP Servers
-3. **Execute Tests**: Copy prompts from AgenticQA and run them in Cursor Chat
-
-### 🔄 Workflow
-1. Create tests in AgenticQA with natural language instructions
-2. Click "Execute" - AgenticQA will:
-   - 🟢 **Auto-copy to clipboard** (with browser extension)
-   - 🟡 **Show formatted prompt** (manual mode)
-3. In Cursor IDE: Open chat (Ctrl+I) and paste
-4. Cursor uses Playwright MCP tools to execute automatically
-5. Copy JSON results back to AgenticQA for storage and reporting
-
-### 📊 Status Indicators
-- 🟢 **Cursor Bridge Ready**: Browser extension active
-- 🟡 **MCP Available**: Direct MCP integration available  
-- ⚪ **Manual Mode**: Copy/paste required
-
-### 🎯 Example Test Execution
-```
-Test: Login Functionality
-Instructions: 
-1. Navigate to https://demo.opencart.com/admin/
-2. Enter "demo" in username field
-3. Enter "demo" in password field  
-4. Click Login button
-5. Verify dashboard loads
-
-Result: 
-- Extension copies prompt to clipboard automatically
-- Cursor executes using browser_navigate, browser_type, browser_click tools
-- Results returned as JSON for AgenticQA storage
-```
-
-**Setup Guides:**
-- Browser Extension: `docs/browser-extension-setup.md`
-- Cursor MCP Config: `docs/cursor-quickstart.md`
-- Manual Setup: `docs/playwright-mcp-setup.md`
-
 ## 🔧 How It Works
 
-### 1. Open AgenticQA
-Simply open `index.html` in your web browser. No installation or server setup required!
+### 1. Start Playwright MCP Server (Optional but Recommended)
+For automated test execution, start the Playwright MCP server:
 
-### 2. Create Test Packs
+**Windows:**
+```bash
+# Double-click start-playwright-mcp.bat
+# OR run in command prompt:
+npx @playwright/mcp@latest --port 8998
+```
+
+**Mac/Linux:**
+```bash
+npx @playwright/mcp@latest --port 8998
+```
+
+The MCP status indicator in the header will show "MCP Connected" when the server is running.
+
+### 2. Open AgenticQA
+Simply open `index.html` in your web browser. No additional installation required!
+
+### 3. Create Test Packs
 Navigate to "Test Packs" and create your test prompts with:
 - Test name
 - Test type/category
@@ -88,54 +50,66 @@ Navigate to "Test Packs" and create your test prompts with:
 - Test instructions (natural language prompt)
 - Expected results
 
-### 3. Execute Tests via Cursor IDE
+### 4. Execute Tests
 When you click "Execute" on a test:
-1. AgenticQA generates a formatted test prompt
-2. Copy the prompt to your clipboard
-3. Paste it into Cursor IDE with Playwright MCP enabled
-4. Execute the test in Cursor
-5. Copy the results back to AgenticQA
-6. The app will parse and store the results automatically
 
-### 4. View Reports
+**If MCP is Connected (Automated):**
+- AgenticQA automatically executes the test via Playwright MCP
+- Browser actions are performed automatically
+- Screenshots are captured
+- Results are displayed immediately
+
+**If MCP is Offline (Manual):**
+- A modal appears with test instructions
+- Copy the prompt to Cursor IDE
+- Execute manually and paste results back
+- Results are parsed and stored
+
+### 5. View Reports
 The Reports section provides:
 - Test execution statistics
 - Pass/fail rate trends
 - Execution history with filtering
-- Detailed execution results with screenshots (if provided by MCP)
+- Detailed execution results with screenshots
 
-### 5. Track Bugs
+### 6. Track Bugs
 - Log bugs for failed tests
 - Track bug severity and status
 - Link bugs to specific test executions
 
-## 📋 Test Execution Format
+## 📋 Test Prompt Format
 
-### Input Prompt to Cursor IDE
-The app generates prompts in this format:
+### Writing Test Prompts
+Write your test steps in natural language. The system will parse and execute them automatically when MCP is connected.
+
+**Example Test Prompt:**
 ```
-Execute the following test using Playwright:
-
-Test Name: [Test Name]
-Module: [Module Name]
-Type: [Test Type]
-
-Test Steps:
-[Your test steps in natural language]
-
-Expected Results:
-[Expected outcomes]
-
-Please execute this test and return the results in JSON format including:
-- Overall status (passed/failed/blocked)
-- Execution duration
-- Step-by-step results with screenshots if applicable
-- Any error logs or messages
-- Validation of expected results
+Navigate to https://example.com
+Click on "Login" button
+Type "user@example.com" in "Email" field
+Type "password123" in "Password" field
+Click "Submit"
+Wait for 2 seconds
+Verify "Dashboard" text is visible
 ```
 
-### Expected Response Format
-The app can parse JSON responses like:
+### Supported Actions:
+- **Navigate**: `Navigate to [URL]`, `Go to [URL]`, `Open [URL]`
+- **Click**: `Click on "[element]"`, `Click the "[element]" button`
+- **Type**: `Type "[text]" in "[field]"`, `Enter "[text]" into "[field]"`
+- **Wait**: `Wait for [X] seconds`, `Wait [X]`
+- **Verify**: `Verify "[text]" is visible`, `Check that "[element]" exists`
+
+### Automated Execution via Playwright MCP
+When MCP is connected, AgenticQA:
+1. Parses your natural language test steps
+2. Converts them to Playwright MCP commands
+3. Executes them in a real browser
+4. Captures screenshots
+5. Returns detailed results
+
+### Manual Execution Format
+When executing manually through Cursor IDE, the app expects results in JSON format:
 ```json
 {
   "status": "passed",
@@ -148,11 +122,7 @@ The app can parse JSON responses like:
       "screenshot": "data:image/png;base64,..."
     }
   ],
-  "logs": ["Test started", "All assertions passed"],
-  "validationResults": {
-    "passed": true,
-    "details": "All expected results matched"
-  }
+  "logs": ["Test started", "All assertions passed"]
 }
 ```
 

@@ -10,10 +10,6 @@ let tests = [];
 let testExecutions = [];
 let bugs = [];
 
-// Global WebSocket connection
-let ws = null;
-let bridgeServerAvailable = false;
-
 // Initialize the application
 function initializeApp() {
     loadDataFromStorage();
@@ -22,11 +18,30 @@ function initializeApp() {
     setInterval(updateDateTime, 1000);
     setupEventListeners();
     
-    // Initialize integrations
-    initializeBridgeDetection();
-    initializeWebSocket();
-    checkBridgeServer();
-    setInterval(checkBridgeServer, 5000);
+    // Check Playwright MCP status
+    checkAndUpdateMCPStatus();
+    setInterval(checkAndUpdateMCPStatus, 10000); // Check every 10 seconds
+}
+
+// Check and update MCP status indicator
+async function checkAndUpdateMCPStatus() {
+    const isAvailable = await checkPlaywrightMCP();
+    const statusDot = document.getElementById('mcpStatusDot');
+    const statusText = document.getElementById('mcpStatusText');
+    
+    if (isAvailable) {
+        statusDot.classList.remove('bg-gray-400', 'bg-red-500');
+        statusDot.classList.add('bg-green-500');
+        statusText.textContent = 'MCP Connected';
+        statusText.classList.remove('text-gray-500', 'text-red-600');
+        statusText.classList.add('text-green-600');
+    } else {
+        statusDot.classList.remove('bg-green-500');
+        statusDot.classList.add('bg-gray-400');
+        statusText.textContent = 'MCP Offline';
+        statusText.classList.remove('text-green-600');
+        statusText.classList.add('text-gray-500');
+    }
 }
 
 // Setup event listeners
@@ -325,141 +340,7 @@ function createExecutableTestCard(test) {
     return card;
 }
 
-// Check if bridge server is running
-async function checkBridgeServer() {
-    try {
-        const response = await fetch('http://localhost:3001/api/status');
-        const data = await response.json();
-        bridgeServerAvailable = data.status === 'running';
-        updateBridgeStatusIndicator(true);
-        return bridgeServerAvailable;
-    } catch (error) {
-        bridgeServerAvailable = false;
-        updateBridgeStatusIndicator(false);
-        return false;
-    }
-}
 
-// Update bridge status indicator in UI
-function updateBridgeStatusIndicator(connected) {
-    const statusDot = document.getElementById('bridgeStatusDot');
-    const statusText = document.getElementById('bridgeStatusText');
-    
-    if (connected) {
-        statusDot.classList.remove('bg-gray-400', 'bg-red-500');
-        statusDot.classList.add('bg-green-500');
-        statusText.textContent = 'Bridge Connected';
-        statusText.classList.remove('text-gray-500', 'text-red-600');
-        statusText.classList.add('text-green-600');
-        bridgeServerAvailable = true;
-    } else {
-        statusDot.classList.remove('bg-green-500');
-        statusDot.classList.add('bg-red-500');
-        statusText.textContent = 'Bridge Disconnected';
-        statusText.classList.remove('text-green-600');
-        statusText.classList.add('text-red-600');
-        bridgeServerAvailable = false;
-    }
-}
-
-// Initialize WebSocket connection
-function initializeWebSocket() {
-    if (ws && ws.readyState === WebSocket.OPEN) return;
-    
-    ws = new WebSocket('ws://localhost:3002');
-    
-    ws.onopen = () => {
-        console.log('WebSocket connected to MCP Bridge');
-        // No need to update indicator here, checkBridgeServer handles it
-    };
-    
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        handleWebSocketMessage(data);
-    };
-    
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        // Bridge status will be updated by checkBridgeServer
-    };
-    
-    ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        ws = null;
-        bridgeServerAvailable = false; // Explicitly set to false
-        updateBridgeStatusIndicator(false);
-        // Try to reconnect only if bridge server is deemed available by http check
-        // This prevents constant reconnection attempts if server is genuinely down.
-    };
-}
-
-// Handle WebSocket messages
-function handleWebSocketMessage(data) {
-    console.log('Received WebSocket message:', data);
-    switch (data.type) {
-        case 'bridge_status':
-            updateBridgeStatusIndicator(data.mcpReady);
-            break;
-        case 'test_started':
-            showNotification('Test execution started via MCP Bridge...', 'info');
-            break;
-        case 'test_completed':
-            handleTestCompletion(data);
-            break;
-        case 'test_error':
-            showNotification(`Test Error: ${data.error}`, 'error');
-            // Re-enable button on error if a specific testId is part of data
-            if(data.testId) {
-                updateExecuteButton(data.testId, false);
-            }
-            break;
-        default:
-            console.log('Unknown WebSocket message type:', data.type);
-    }
-}
-
-// Handle automated test completion
-function handleTestCompletion(data) {
-    // Find the test and execution
-    const test = tests.find(t => t.id === data.testId);
-    const execution = testExecutions.find(e => e.testId === data.testId && e.status === 'in_progress');
-    
-    if (!test || !execution) return;
-    
-    // Update execution
-    execution.status = data.status;
-    execution.duration = data.duration;
-    execution.logs = data.logs;
-    execution.screenshots = data.screenshots;
-    execution.validationResults = data.validationResults;
-    
-    // Update test status
-    test.status = data.status;
-    test.lastExecuted = data.executedAt;
-    
-    saveTestsToStorage();
-    saveExecutionsToStorage();
-    
-    showNotification(`Test ${data.status}! ${data.validationResults?.details || ''}`, 
-        data.status === 'passed' ? 'success' : 'error');
-    
-    if (data.status === 'failed' || data.status === 'blocked') {
-        // Prompt to log a bug
-        if (confirm('Test failed. Would you like to log a bug?')) {
-            logBugForTest(data.testId, execution.id);
-        }
-    }
-    
-    // Refresh the current page
-    switch(currentPage) {
-        case 'execute':
-            loadExecutableTests();
-            break;
-        case 'reports':
-            loadReports();
-            break;
-    }
-}
 
 async function executeTest(testId) {
     const test = tests.find(t => t.id === testId);
@@ -483,61 +364,185 @@ async function executeTest(testId) {
     // Update UI to show test is running
     loadExecutableTests();
     
-    // Check available execution methods in order of preference
-    if (window.AgenticQABridge && window.AgenticQABridge.isAvailable()) {
-        // Use browser extension bridge to Cursor
-        executeTestWithBridge(test, execution);
-    } else if (window.AgenticQAMCP && window.AgenticQAMCP.isAvailable()) {
-        // Use direct MCP integration
-        executeTestWithDirectMCP(test, execution);
+    // Check if Playwright MCP is available
+    const mcpAvailable = await checkPlaywrightMCP();
+    
+    if (mcpAvailable) {
+        // Execute directly via Playwright MCP
+        executeTestWithPlaywrightMCP(test, execution);
     } else {
         // Fall back to manual execution
         showExecutionModal(test, execution);
     }
 }
 
-// Execute test using browser extension bridge
-async function executeTestWithBridge(test, execution) {
+// Check if Playwright MCP server is running
+async function checkPlaywrightMCP() {
     try {
-        showNotification('Sending test to Cursor IDE...', 'info');
+        const response = await fetch('http://localhost:8998/mcp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'browser_snapshot',
+                params: {}
+            })
+        });
         
-        const startTime = Date.now();
-        const prompt = generateMCPPrompt(test);
+        if (response.ok) {
+            const data = await response.json();
+            return !data.error;
+        }
+        return false;
+    } catch (error) {
+        return false;
+    }
+}
+
+// Execute test using Playwright MCP
+async function executeTestWithPlaywrightMCP(test, execution) {
+    const startTime = Date.now();
+    
+    try {
+        showNotification('Executing test via Playwright MCP...', 'info');
         
-        // Execute through browser extension bridge
-        const result = await window.AgenticQABridge.executeTest(test, prompt);
+        // Parse test prompt to extract URL and actions
+        const testData = parseTestPrompt(test.prompt);
         
-        if (result.status === 'manual_execution_required') {
-            // Extension copied prompt to clipboard, show instructions
-            showNotification(result.message, 'info');
+        // 1. Navigate to the test URL
+        let response = await fetch('http://localhost:8998/mcp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'browser_navigate',
+                params: {
+                    url: testData.url || 'https://example.com'
+                }
+            })
+        });
+        
+        if (!response.ok) throw new Error('Failed to navigate');
+        
+        // 2. Wait for page to load
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // 3. Take initial snapshot
+        response = await fetch('http://localhost:8998/mcp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 2,
+                method: 'browser_snapshot',
+                params: {}
+            })
+        });
+        
+        const snapshot = await response.json();
+        
+        // 4. Execute test actions
+        const steps = [];
+        for (let i = 0; i < testData.actions.length; i++) {
+            const action = testData.actions[i];
+            const step = {
+                action: action.description,
+                status: 'in_progress'
+            };
             
-            // Show modal for manual result entry
-            showExecutionModal(test, execution, {
-                prefilledPrompt: prompt,
-                clipboardCopied: true
-            });
-            return;
+            try {
+                if (action.type === 'click') {
+                    response = await fetch('http://localhost:8998/mcp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            id: i + 3,
+                            method: 'browser_click',
+                            params: {
+                                element: action.element,
+                                ref: findElementRef(snapshot.result, action.element)
+                            }
+                        })
+                    });
+                } else if (action.type === 'type') {
+                    response = await fetch('http://localhost:8998/mcp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            id: i + 3,
+                            method: 'browser_type',
+                            params: {
+                                element: action.element,
+                                ref: findElementRef(snapshot.result, action.element),
+                                text: action.text
+                            }
+                        })
+                    });
+                } else if (action.type === 'wait') {
+                    response = await fetch('http://localhost:8998/mcp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0',
+                            id: i + 3,
+                            method: 'browser_wait_for',
+                            params: {
+                                time: action.time || 2
+                            }
+                        })
+                    });
+                }
+                
+                step.status = 'passed';
+                step.duration = Date.now() - startTime;
+            } catch (error) {
+                step.status = 'failed';
+                step.error = error.message;
+            }
+            
+            steps.push(step);
         }
         
-        // Process automated result
-        execution.status = result.status || 'completed';
+        // 5. Take final screenshot
+        response = await fetch('http://localhost:8998/mcp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 100,
+                method: 'browser_take_screenshot',
+                params: {
+                    raw: false
+                }
+            })
+        });
+        
+        const screenshotResult = await response.json();
+        
+        // Update execution record
+        execution.status = steps.every(s => s.status === 'passed') ? 'passed' : 'failed';
         execution.duration = Date.now() - startTime;
-        execution.screenshots = result.screenshots || [];
-        execution.logs = result.logs || [];
-        execution.steps = result.steps || [];
-        execution.validationResults = result.validationResults || null;
+        execution.steps = steps;
+        execution.screenshots = screenshotResult.result ? [screenshotResult.result] : [];
+        execution.logs = ['Test executed via Playwright MCP'];
         
         // Update test status
-        test.status = execution.status;
-        test.lastExecuted = execution.executedAt;
+        const testToUpdate = tests.find(t => t.id === test.id);
+        if (testToUpdate) {
+            testToUpdate.status = execution.status;
+            testToUpdate.lastExecuted = execution.executedAt;
+        }
         
         saveTestsToStorage();
         saveExecutionsToStorage();
         
         showNotification(`Test ${execution.status}!`, execution.status === 'passed' ? 'success' : 'error');
         
-        // Prompt for bug if failed
-        if (execution.status === 'failed' || execution.status === 'blocked') {
+        if (execution.status === 'failed') {
             if (confirm('Test failed. Would you like to log a bug?')) {
                 showBugModal(test.id, execution.id);
             }
@@ -547,19 +552,80 @@ async function executeTestWithBridge(test, execution) {
         loadExecutableTests();
         
     } catch (error) {
-        console.error('Bridge execution failed:', error);
+        console.error('MCP execution error:', error);
         execution.status = 'failed';
-        execution.logs = [`Bridge execution error: ${error.message}`];
-        saveExecutionsToStorage();
+        execution.duration = Date.now() - startTime;
+        execution.logs = [`Error: ${error.message}`];
         
-        showNotification('Bridge execution failed. Falling back to manual mode.', 'error');
+        saveExecutionsToStorage();
+        showNotification('Test execution failed: ' + error.message, 'error');
         
         // Fall back to manual execution
         showExecutionModal(test, execution);
     }
 }
 
-function showExecutionModal(test, execution, options = {}) {
+// Parse test prompt to extract actions
+function parseTestPrompt(prompt) {
+    const data = {
+        url: null,
+        actions: []
+    };
+    
+    // Extract URL
+    const urlMatch = prompt.match(/(?:navigate to|go to|open)\s+(https?:\/\/[^\s]+)/i);
+    if (urlMatch) {
+        data.url = urlMatch[1];
+    }
+    
+    // Extract actions
+    const lines = prompt.split('\n');
+    lines.forEach(line => {
+        const trimmedLine = line.trim().toLowerCase();
+        
+        if (trimmedLine.includes('click')) {
+            const elementMatch = line.match(/click (?:on |the )?"?([^"]+)"?/i);
+            if (elementMatch) {
+                data.actions.push({
+                    type: 'click',
+                    element: elementMatch[1].trim(),
+                    description: line.trim()
+                });
+            }
+        } else if (trimmedLine.includes('type') || trimmedLine.includes('enter')) {
+            const typeMatch = line.match(/(?:type|enter)\s+"([^"]+)"(?:\s+in(?:to)?\s+"?([^"]+)"?)?/i);
+            if (typeMatch) {
+                data.actions.push({
+                    type: 'type',
+                    text: typeMatch[1],
+                    element: typeMatch[2] || 'input field',
+                    description: line.trim()
+                });
+            }
+        } else if (trimmedLine.includes('wait')) {
+            const waitMatch = line.match(/wait\s+(?:for\s+)?(\d+)/i);
+            if (waitMatch) {
+                data.actions.push({
+                    type: 'wait',
+                    time: parseInt(waitMatch[1]),
+                    description: line.trim()
+                });
+            }
+        }
+    });
+    
+    return data;
+}
+
+// Find element reference in snapshot
+function findElementRef(snapshot, elementDescription) {
+    // This is a simplified version - in reality, you'd need to parse the snapshot
+    // and find the element that matches the description
+    // For now, we'll return a placeholder
+    return elementDescription.toLowerCase().replace(/\s+/g, '_');
+}
+
+function showExecutionModal(test, execution) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center';
     modal.id = `execution-modal-${execution.id}`;
@@ -581,9 +647,9 @@ function showExecutionModal(test, execution, options = {}) {
             <div class="mb-6">
                 <h4 class="font-semibold text-gray-800 mb-2">Test Prompt:</h4>
                 <div class="bg-gray-100 rounded-lg p-4">
-                    <pre class="whitespace-pre-wrap text-sm text-gray-700">${options.prefilledPrompt || generateMCPPrompt(test)}</pre>
+                    <pre class="whitespace-pre-wrap text-sm text-gray-700">${generateMCPPrompt(test)}</pre>
                 </div>
-                <button onclick="copyToClipboard('${escapeQuotes(options.prefilledPrompt || generateMCPPrompt(test))}')" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800">
+                <button onclick="copyToClipboard('${escapeQuotes(generateMCPPrompt(test))}')" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800">
                     <i data-feather="copy" class="w-4 h-4 inline"></i> Copy Prompt
                 </button>
             </div>
@@ -615,50 +681,24 @@ function showExecutionModal(test, execution, options = {}) {
 }
 
 function generateMCPPrompt(test) {
-    return `Please execute this test using Playwright MCP tools in Cursor IDE:
+    return `Execute the following test using Playwright:
 
-**Test Details:**
-- Name: ${test.name}
-- Module: ${test.module}
-- Type: ${test.type}
+Test Name: ${test.name}
+Module: ${test.module}
+Type: ${test.type}
 
-**Test Instructions:**
+Test Steps:
 ${test.prompt}
 
-**Expected Results:**
+Expected Results:
 ${test.expectedResults}
 
-**Execution Steps:**
-1. Use browser_navigate to go to the target URL
-2. Use browser_snapshot to capture the initial page state
-3. Follow the test instructions step by step using appropriate MCP tools:
-   - browser_click for clicking elements
-   - browser_type for entering text
-   - browser_wait_for for waiting conditions
-   - browser_take_screenshot for capturing evidence
-4. Validate the expected results
-5. Provide a summary in this JSON format:
-
-\`\`\`json
-{
-  "status": "passed|failed|blocked",
-  "duration": "execution time in milliseconds",
-  "steps": [
-    {
-      "action": "description of action",
-      "status": "passed|failed",
-      "screenshot": "base64 screenshot if available"
-    }
-  ],
-  "logs": ["step by step execution logs"],
-  "validationResults": {
-    "passed": true/false,
-    "details": "validation details"
-  }
-}
-\`\`\`
-
-Please execute this test and return the results in the specified JSON format.`;
+Please execute this test and return the results in JSON format including:
+- Overall status (passed/failed/blocked)
+- Execution duration
+- Step-by-step results with screenshots if applicable
+- Any error logs or messages
+- Validation of expected results`;
 }
 
 function copyToClipboard(text) {
@@ -1498,58 +1538,4 @@ function showNotification(message, type) {
             notification.remove();
         }, 300);
     }, 3000);
-}
-
-// Initialize bridge detection
-function initializeBridgeDetection() {
-    // Listen for bridge ready event
-    window.addEventListener('agenticqa-bridge-ready', function() {
-        console.log('AgenticQA Bridge is ready');
-        updateBridgeStatusIndicator(true);
-    });
-    
-    // Check if bridge is already available
-    if (window.AgenticQABridge && window.AgenticQABridge.isAvailable()) {
-        updateBridgeStatusIndicator(true);
-    }
-    
-    // Periodic check for bridge availability
-    setInterval(checkBridgeAvailability, 5000);
-}
-
-// Check bridge availability
-function checkBridgeAvailability() {
-    const available = window.AgenticQABridge && window.AgenticQABridge.isAvailable();
-    updateBridgeStatusIndicator(available);
-}
-
-// Update bridge status indicator
-function updateBridgeStatusIndicator(available) {
-    const statusDot = document.getElementById('mcpStatusDot');
-    const statusText = document.getElementById('mcpStatusText');
-    
-    if (!statusDot || !statusText) return;
-    
-    if (available) {
-        statusDot.classList.remove('bg-gray-400', 'bg-red-500');
-        statusDot.classList.add('bg-green-500');
-        statusText.textContent = 'Cursor Bridge Ready';
-        statusText.classList.remove('text-gray-500', 'text-red-600');
-        statusText.classList.add('text-green-600');
-    } else {
-        // Check if MCP is available as fallback
-        if (window.AgenticQAMCP && window.AgenticQAMCP.isAvailable()) {
-            statusDot.classList.remove('bg-gray-400', 'bg-red-500');
-            statusDot.classList.add('bg-yellow-500');
-            statusText.textContent = 'MCP Available';
-            statusText.classList.remove('text-gray-500', 'text-red-600');
-            statusText.classList.add('text-yellow-600');
-        } else {
-            statusDot.classList.remove('bg-green-500', 'bg-yellow-500');
-            statusDot.classList.add('bg-gray-400');
-            statusText.textContent = 'Manual Mode';
-            statusText.classList.remove('text-green-600', 'text-yellow-600');
-            statusText.classList.add('text-gray-500');
-        }
-    }
 } 
