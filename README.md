@@ -19,6 +19,37 @@ A modern, lightweight test management system that leverages browser local storag
 - Smoke Test
 - Performance
 
+## 🎯 Using with Cursor IDE & Playwright MCP
+
+AgenticQA integrates seamlessly with Cursor IDE's Playwright MCP for automated test execution:
+
+### Quick Setup
+1. **Install Playwright MCP**: `npm install -g @playwright/mcp@latest`
+2. **Configure Cursor**: Add Playwright MCP in Cursor Settings → Features → MCP Servers
+3. **Execute Tests**: Copy prompts from AgenticQA and run them in Cursor Chat
+
+### Workflow
+1. Create tests in AgenticQA with natural language instructions
+2. Click "Execute" to get a formatted prompt for Cursor
+3. Paste the prompt in Cursor IDE chat (Cmd/Ctrl + I)
+4. Cursor uses Playwright MCP tools to execute the test automatically
+5. Copy the JSON results back to AgenticQA for storage and reporting
+
+### Example Test Execution
+```
+Test: Login Functionality
+Instructions: 
+1. Navigate to https://demo.opencart.com/admin/
+2. Enter "demo" in username field
+3. Enter "demo" in password field  
+4. Click Login button
+5. Verify dashboard loads
+
+Result: Cursor automatically executes using browser_navigate, browser_type, browser_click, and browser_snapshot tools
+```
+
+For detailed setup instructions, see `docs/cursor-quickstart.md`
+
 ## 🔧 How It Works
 
 ### 1. Open AgenticQA

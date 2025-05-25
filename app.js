@@ -482,8 +482,73 @@ async function executeTest(testId) {
     // Update UI to show test is running
     loadExecutableTests();
     
-    // Show execution modal with instructions
-    showExecutionModal(test, execution);
+    // Check if MCP integration is available
+    if (window.AgenticQAMCP && window.AgenticQAMCP.isAvailable()) {
+        // Use direct MCP integration
+        executeTestWithDirectMCP(test, execution);
+    } else {
+        // Fall back to manual execution
+        showExecutionModal(test, execution);
+    }
+}
+
+// Direct MCP execution
+async function executeTestWithDirectMCP(test, execution) {
+    try {
+        showNotification('Executing test via Playwright MCP...', 'info');
+        
+        const startTime = Date.now();
+        
+        // Execute through MCP
+        const result = await window.AgenticQAMCP.executeTest({
+            prompt: generateMCPPrompt(test),
+            metadata: {
+                testId: test.id,
+                executionId: execution.id,
+                name: test.name,
+                module: test.module,
+                type: test.type
+            }
+        });
+        
+        // Update execution with results
+        execution.status = result.status || 'completed';
+        execution.duration = Date.now() - startTime;
+        execution.screenshots = result.screenshots || [];
+        execution.logs = result.logs || [];
+        execution.steps = result.steps || [];
+        execution.validationResults = result.validationResults || null;
+        
+        // Update test status
+        test.status = execution.status;
+        test.lastExecuted = execution.executedAt;
+        
+        saveTestsToStorage();
+        saveExecutionsToStorage();
+        
+        showNotification(`Test ${execution.status}!`, execution.status === 'passed' ? 'success' : 'error');
+        
+        // Prompt for bug if failed
+        if (execution.status === 'failed' || execution.status === 'blocked') {
+            if (confirm('Test failed. Would you like to log a bug?')) {
+                showBugModal(test.id, execution.id);
+            }
+        }
+        
+        // Refresh UI
+        loadExecutableTests();
+        
+    } catch (error) {
+        console.error('MCP execution failed:', error);
+        execution.status = 'failed';
+        execution.logs = [`MCP execution error: ${error.message}`];
+        saveExecutionsToStorage();
+        
+        showNotification('MCP execution failed. Falling back to manual mode.', 'error');
+        
+        // Fall back to manual execution
+        showExecutionModal(test, execution);
+    }
 }
 
 function showExecutionModal(test, execution) {
@@ -542,24 +607,50 @@ function showExecutionModal(test, execution) {
 }
 
 function generateMCPPrompt(test) {
-    return `Execute the following test using Playwright:
+    return `Please execute this test using Playwright MCP tools in Cursor IDE:
 
-Test Name: ${test.name}
-Module: ${test.module}
-Type: ${test.type}
+**Test Details:**
+- Name: ${test.name}
+- Module: ${test.module}
+- Type: ${test.type}
 
-Test Steps:
+**Test Instructions:**
 ${test.prompt}
 
-Expected Results:
+**Expected Results:**
 ${test.expectedResults}
 
-Please execute this test and return the results in JSON format including:
-- Overall status (passed/failed/blocked)
-- Execution duration
-- Step-by-step results with screenshots if applicable
-- Any error logs or messages
-- Validation of expected results`;
+**Execution Steps:**
+1. Use browser_navigate to go to the target URL
+2. Use browser_snapshot to capture the initial page state
+3. Follow the test instructions step by step using appropriate MCP tools:
+   - browser_click for clicking elements
+   - browser_type for entering text
+   - browser_wait_for for waiting conditions
+   - browser_take_screenshot for capturing evidence
+4. Validate the expected results
+5. Provide a summary in this JSON format:
+
+\`\`\`json
+{
+  "status": "passed|failed|blocked",
+  "duration": "execution time in milliseconds",
+  "steps": [
+    {
+      "action": "description of action",
+      "status": "passed|failed",
+      "screenshot": "base64 screenshot if available"
+    }
+  ],
+  "logs": ["step by step execution logs"],
+  "validationResults": {
+    "passed": true/false,
+    "details": "validation details"
+  }
+}
+\`\`\`
+
+Please execute this test and return the results in the specified JSON format.`;
 }
 
 function copyToClipboard(text) {

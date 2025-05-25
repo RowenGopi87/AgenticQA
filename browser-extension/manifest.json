@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "AgenticQA MCP Bridge",
+  "version": "1.0.0",
+  "description": "Bridge between AgenticQA and Playwright MCP",
+  "permissions": [
+    "nativeMessaging",
+    "tabs",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "https://localhost/*",
+    "file:///*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  }
+} 
