@@ -364,22 +364,169 @@ async function executeTest(testId) {
     // Update UI to show test is running
     loadExecutableTests();
     
-    // Always use manual execution through Cursor IDE
-    showExecutionModal(test, execution);
-}
-
-// Check if Playwright MCP server is running
-async function checkPlaywrightMCP() {
-    // For now, we'll assume MCP is available if we're running locally
-    // The actual MCP connection happens through Cursor IDE, not direct HTTP
-    // This is a placeholder that always returns false to use manual mode
-    return false;
+    // Check if Playwright MCP bridge is available
+    const mcpAvailable = await checkPlaywrightMCP();
     
-    // TODO: In the future, implement proper MCP client using WebSocket or SSE
-    // MCP servers don't expose a simple HTTP endpoint for status checks
+    if (mcpAvailable) {
+        // Execute directly via Playwright MCP bridge
+        executeTestWithPlaywrightMCP(test, execution);
+    } else {
+        // Fall back to manual execution through Cursor IDE
+        showExecutionModal(test, execution);
+    }
 }
 
+// Check if Playwright MCP bridge server is running
+async function checkPlaywrightMCP() {
+    try {
+        const response = await fetch('http://localhost:3001/status');
+        if (response.ok) {
+            const data = await response.json();
+            return data.status === 'connected';
+        }
+        return false;
+    } catch (error) {
+        return false;
+    }
+}
 
+// Execute test using Playwright MCP bridge
+async function executeTestWithPlaywrightMCP(test, execution) {
+    const startTime = Date.now();
+    
+    try {
+        showNotification('Executing test via Playwright MCP...', 'info');
+        
+        // Parse test prompt to extract actions
+        const testSteps = parseTestPrompt(test.prompt);
+        
+        // Send to bridge server
+        const response = await fetch('http://localhost:3001/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ testSteps })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Bridge server error: ' + response.statusText);
+        }
+        
+        const results = await response.json();
+        
+        // Update execution record
+        execution.status = results.status;
+        execution.duration = results.duration;
+        execution.steps = results.steps;
+        execution.screenshots = results.screenshots;
+        execution.logs = results.steps.flatMap(s => s.logs);
+        
+        // Update test status
+        const testToUpdate = tests.find(t => t.id === test.id);
+        if (testToUpdate) {
+            testToUpdate.status = execution.status;
+            testToUpdate.lastExecuted = execution.executedAt;
+        }
+        
+        saveTestsToStorage();
+        saveExecutionsToStorage();
+        
+        showNotification(`Test ${execution.status}!`, execution.status === 'passed' ? 'success' : 'error');
+        
+        if (execution.status === 'failed') {
+            if (confirm('Test failed. Would you like to log a bug?')) {
+                showBugModal(test.id, execution.id);
+            }
+        }
+        
+        // Refresh UI
+        loadExecutableTests();
+        
+    } catch (error) {
+        console.error('MCP execution error:', error);
+        execution.status = 'failed';
+        execution.duration = Date.now() - startTime;
+        execution.logs = [`Error: ${error.message}`];
+        
+        saveExecutionsToStorage();
+        showNotification('Test execution failed: ' + error.message, 'error');
+        
+        // Fall back to manual execution
+        showExecutionModal(test, execution);
+    }
+}
+
+// Parse test prompt to extract actions
+function parseTestPrompt(prompt) {
+    const steps = [];
+    const lines = prompt.split('\n');
+    
+    lines.forEach(line => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return;
+        
+        // Navigate
+        const navMatch = trimmedLine.match(/(?:navigate to|go to|open)\s+(https?:\/\/[^\s]+)/i);
+        if (navMatch) {
+            steps.push({
+                type: 'navigate',
+                url: navMatch[1],
+                description: trimmedLine
+            });
+            return;
+        }
+        
+        // Click
+        const clickMatch = trimmedLine.match(/click (?:on |the )?"?([^"]+)"?/i);
+        if (clickMatch) {
+            steps.push({
+                type: 'click',
+                element: clickMatch[1].trim(),
+                description: trimmedLine
+            });
+            return;
+        }
+        
+        // Type
+        const typeMatch = trimmedLine.match(/(?:type|enter)\s+"([^"]+)"(?:\s+in(?:to)?\s+"?([^"]+)"?)?/i);
+        if (typeMatch) {
+            steps.push({
+                type: 'type',
+                text: typeMatch[1],
+                element: typeMatch[2] || 'input field',
+                description: trimmedLine
+            });
+            return;
+        }
+        
+        // Wait
+        const waitMatch = trimmedLine.match(/wait\s+(?:for\s+)?(\d+)/i);
+        if (waitMatch) {
+            steps.push({
+                type: 'wait',
+                time: parseInt(waitMatch[1]),
+                description: trimmedLine
+            });
+            return;
+        }
+        
+        // Screenshot
+        if (trimmedLine.toLowerCase().includes('screenshot')) {
+            steps.push({
+                type: 'screenshot',
+                description: trimmedLine
+            });
+            return;
+        }
+    });
+    
+    // Always add a final screenshot
+    steps.push({
+        type: 'screenshot',
+        description: 'Capture final state'
+    });
+    
+    return steps;
+}
 
 function showExecutionModal(test, execution) {
     const modal = document.createElement('div');

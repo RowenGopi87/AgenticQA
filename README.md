@@ -6,12 +6,19 @@ A modern, lightweight test management system that leverages browser local storag
 
 ### Core Functionality
 - **Test Pack Management** - Create, categorize, and manage test prompts
-- **Automated Test Execution** - Direct integration with Playwright MCP server for automated browser testing
-- **Manual Execution Fallback** - Execute tests manually through Cursor IDE when MCP is not available
+- **Automated Test Execution** - Direct integration with Playwright MCP via bridge server
+- **Manual Execution Fallback** - Execute tests manually through Cursor IDE when bridge is not available
 - **Local Storage** - No backend required, all data stored in browser
 - **Visual Reports** - Charts and analytics for test execution results
 - **Bug Tracking** - Link bugs to failed test executions
 - **Data Import/Export** - Backup and restore your test data
+
+### Bridge Server Architecture
+The bridge server acts as an intermediary between AgenticQA (web app) and Playwright MCP:
+- Accepts HTTP requests from AgenticQA
+- Translates them to MCP protocol commands
+- Communicates with Playwright MCP server via STDIO
+- Returns results back to AgenticQA in JSON format
 
 ### Test Categories
 - Functional
@@ -22,11 +29,29 @@ A modern, lightweight test management system that leverages browser local storag
 
 ## 🔧 How It Works
 
-### 1. Configure Playwright MCP in Cursor IDE
-The Playwright MCP integration works through Cursor IDE, not directly with the web app.
+### 1. Start the Playwright MCP Bridge Server
+The bridge server enables direct communication between AgenticQA and Playwright MCP.
 
-**Setup in Cursor IDE:**
-1. Install Playwright MCP in Cursor by going to Settings → MCP → Add Server
+**Windows:**
+```bash
+# Double-click start-bridge.bat
+# OR run in command prompt:
+npm install
+node playwright-mcp-bridge.js
+```
+
+**Mac/Linux:**
+```bash
+npm install
+node playwright-mcp-bridge.js
+```
+
+The MCP status indicator in the header will show "MCP Connected" when the bridge server is running.
+
+### Alternative: Manual Execution via Cursor IDE
+If you prefer not to use the bridge server, you can still execute tests manually through Cursor IDE:
+
+1. Install Playwright MCP in Cursor (Settings → MCP → Add Server)
 2. Configure it with:
 ```json
 {
@@ -38,8 +63,6 @@ The Playwright MCP integration works through Cursor IDE, not directly with the w
   }
 }
 ```
-
-**Note:** The MCP status in AgenticQA will show "MCP Offline" because direct browser-to-MCP connections are not supported. MCP servers communicate through IDE clients like Cursor, not web browsers.
 
 ### 2. Open AgenticQA
 Simply open `index.html` in your web browser. No additional installation required!
@@ -55,7 +78,13 @@ Navigate to "Test Packs" and create your test prompts with:
 ### 4. Execute Tests
 When you click "Execute" on a test:
 
-**Manual Execution through Cursor IDE:**
+**If Bridge Server is Running (Automated):**
+- AgenticQA automatically executes the test via the bridge server
+- Browser actions are performed by Playwright MCP
+- Screenshots are captured automatically
+- Results are displayed immediately in AgenticQA
+
+**If Bridge Server is Not Running (Manual):**
 1. A modal appears with the test prompt
 2. Copy the prompt to your clipboard
 3. Paste it into Cursor IDE (with Playwright MCP enabled)
@@ -63,9 +92,6 @@ When you click "Execute" on a test:
 5. Copy the results from Cursor
 6. Paste them back into AgenticQA
 7. Results are parsed and stored automatically
-
-**Why Manual?**
-MCP (Model Context Protocol) is designed to work through IDE clients like Cursor, not directly from web browsers. This ensures security and proper integration with AI assistants.
 
 ### 5. View Reports
 The Reports section provides:

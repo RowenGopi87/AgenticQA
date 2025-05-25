@@ -1,0 +1,19 @@
+{
+  "name": "playwright-mcp-bridge",
+  "version": "1.0.0",
+  "description": "HTTP bridge for Playwright MCP server",
+  "main": "playwright-mcp-bridge.js",
+  "scripts": {
+    "start": "node playwright-mcp-bridge.js",
+    "dev": "nodemon playwright-mcp-bridge.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "@playwright/mcp": "latest"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+} 
