@@ -355,6 +355,9 @@ function handleWebSocketMessage(data) {
         case 'test_started':
             showNotification('Test execution started...', 'info');
             break;
+        case 'cursor_opened':
+            showNotification(data.message, 'info');
+            break;
         case 'test_completed':
             handleTestCompletion(data);
             break;
@@ -444,10 +447,45 @@ async function executeTestAutomated(test) {
     updateExecuteButton(test.id, true);
     
     try {
-        // Try to open Cursor IDE
-        await fetch('http://localhost:3001/api/open-cursor', { method: 'POST' });
+        // Format the test prompt
+        const formattedPrompt = `
+Execute this Playwright test:
+
+Test Name: ${test.name}
+Test Type: ${test.type}
+Module: ${test.module}
+
+Test Instructions:
+${test.prompt}
+
+Expected Results:
+${test.expectedResults}
+
+Please:
+1. Navigate to the appropriate page/URL
+2. Perform the test actions as described
+3. Verify the expected results
+4. Return the test status (passed/failed/blocked) and any relevant screenshots or logs
+`;
+
+        // Try to open Cursor IDE with the prompt
+        const cursorResponse = await fetch('http://localhost:3001/api/open-cursor', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ testPrompt: formattedPrompt })
+        });
         
-        // Send test to bridge server
+        const cursorResult = await cursorResponse.json();
+        
+        if (cursorResult.success) {
+            showNotification('Cursor IDE opened with test prompt. Check Agent Mode.', 'success');
+        } else {
+            showNotification(cursorResult.message || 'Please paste the prompt in Cursor Agent Mode', 'warning');
+        }
+        
+        // Send test to bridge server for execution
         const response = await fetch('http://localhost:3001/api/execute-test', {
             method: 'POST',
             headers: {

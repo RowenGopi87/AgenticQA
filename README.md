@@ -35,11 +35,10 @@ Navigate to "Test Packs" and create your test prompts with:
 With the MCP Bridge Server running:
 1. Click "Execute" on a test
 2. The system automatically:
-   - Opens Cursor IDE (if possible)
+   - Opens Cursor IDE with a markdown file containing your test prompt
+   - Copies the prompt to clipboard as fallback
    - Sends the test to Cursor's Playwright MCP
-   - Executes the test
-   - Captures screenshots and results
-   - Updates the test status automatically
+   - Updates the test status when complete
 3. Real-time updates via WebSocket connection
 
 #### Manual Execution (Fallback)
@@ -89,6 +88,16 @@ The bridge server will:
 - Start on http://localhost:3001
 - Enable WebSocket connection on ws://localhost:3002
 - Show connection status in the AgenticQA header
+
+## 📋 Cursor Agent Mode Integration
+
+For detailed information on how AgenticQA integrates with Cursor's Agent Mode, see the [Cursor Integration Guide](CURSOR_INTEGRATION.md).
+
+### Quick Summary:
+- AgenticQA creates a markdown file with your test prompt
+- Cursor opens with this file
+- Copy the content into Agent Mode to execute
+- Results can be recorded automatically or manually
 
 ## 📋 MCP Integration Details
 
